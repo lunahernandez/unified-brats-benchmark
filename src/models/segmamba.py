@@ -8,8 +8,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Source: https://github.com/ge-xing/SegMamba/blob/main/model_segmamba/segmamba.py
-# Modified for this project by Luna Hernández, 2026.
+#
+# Source:
+# https://github.com/ge-xing/SegMamba/blob/main/model_segmamba/segmamba.py
+#
+# Adapted for the unified-brats-benchmark project by:
+# Luna Hernández and Diego Torrejón, 2026.
+#
+# Modifications include integration into the unified experimental pipeline,
+# adaptation of the model interface, and compatibility adjustments for the
+# benchmark training and evaluation framework.
+
 
 from __future__ import annotations
 import torch.nn as nn

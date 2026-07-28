@@ -8,12 +8,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# Modified in this project:
-# - added a build_segmambav2() helper function
-# - adapted for the BraTS-MEN experimental pipeline
-# Original source:
+#
+# Source:
 # https://github.com/ge-xing/SegMamba-V2/blob/main/brats23/models_segmamba/segmambav2.py
+#
+# Adapted for the unified-brats-benchmark project by:
+# Luna Hernández and Diego Torrejón, 2026.
+#
+# Modifications include integration into the unified experimental pipeline,
+# addition of the build_segmambav2() helper function, and adaptation of the
+# model interface for the benchmark training and evaluation framework.
+
 
 from __future__ import annotations
 import torch.nn as nn

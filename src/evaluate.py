@@ -1039,10 +1039,3 @@ def evaluate_test(
 
         "avg_inference_time_sec": get_mean(inference_times),
     }
-
-
-
-
-
-
-

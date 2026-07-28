@@ -1,17 +1,34 @@
 unified-brats-benchmark
-Copyright 2026 Luna Hernández y Diego Torrejón
+Copyright 2026 Luna Hernández and Diego Torrejón
 
 This project includes or adapts code from the following sources:
 
 - SegMamba
-  Source: https://github.com/ge-xing/SegMamba/blob/main/model_segmamba/segmamba.py
-  The original file includes a copyright notice from the MONAI Consortium and is licensed under the Apache License, Version 2.0.
+  Source:
+  https://github.com/ge-xing/SegMamba/blob/main/model_segmamba/segmamba.py
+
+  The original implementation includes a copyright notice from the MONAI Consortium
+  and is licensed under the Apache License, Version 2.0.
+
+- SegMamba-V2
+  Source:
+  https://github.com/ge-xing/SegMamba-V2
+
+  The original implementation is licensed under the Apache License, Version 2.0.
+
+  Modifications were made to integrate SegMamba-V2 into the unified experimental
+  framework of this project, including adaptation of the model interface,
+  compatibility adjustments, and integration with the training and evaluation
+  pipeline developed by Luna Hernández and Diego Torrejón.
 
 - BraTS-2024-Metrics
   Sources:
   - https://github.com/rachitsaluja/BraTS-2024-Metrics/blob/main/metrics_GLI.py
   - https://github.com/rachitsaluja/BraTS-2024-Metrics/blob/main/metrics_MEN.py
-  Licensed under the Apache License, Version 2.0.
-  License: https://github.com/rachitsaluja/BraTS-2024-Metrics/blob/main/LICENSE
 
-Modifications were made to adapt the code to the experimental pipeline of this project by Luna Hernández and Diego Torrejón.
+  Licensed under the Apache License, Version 2.0.
+  License:
+  https://github.com/rachitsaluja/BraTS-2024-Metrics/blob/main/LICENSE
+
+Modifications were made to adapt the external code to the experimental pipeline
+of this project by Luna Hernández and Diego Torrejón.

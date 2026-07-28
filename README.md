@@ -12,7 +12,7 @@ Five representative architectures from different deep learning paradigms are eva
 * SegResNet, representing residual convolutional architectures;
 * Swin UNETR, representing Transformer-based architectures;
 * SegMamba, representing State Space Models;
-* SegMambaV2, representing a newer Mamba-based State Space Model architecture.
+* SegMamba-V2, representing a newer Mamba-based State Space Model architecture.
 
 The models are evaluated under homogeneous experimental conditions, using the same preprocessing, data augmentation, optimization strategy, validation protocol, and inference procedure. The benchmark considers two clinically distinct BraTS datasets: **BraTS 2023**, for intracranial meningioma segmentation, and **BraTS 2024**, for post-treatment glioma segmentation.
 
@@ -99,7 +99,7 @@ The preprocessing pipeline includes:
 2. Reorienting volumes to the RAS anatomical convention.
 3. Resampling to an isotropic voxel spacing of `1.0 × 1.0 × 1.0 mm³`.
 4. Cropping the foreground region.
-5. Padding volumes to a minimum spatial size of `128 × 128 × 128` voxels.
+5. Padding volumes when required to ensure a minimum spatial size of `128 × 128 × 128` voxels.
 6. Normalizing MRI intensities independently for each modality.
 7. Applying random spatial crops, flips, intensity scaling, and intensity shifting during training.
 8. Using deterministic preprocessing during validation and testing.
@@ -111,16 +111,16 @@ The same preprocessing and augmentation strategy is used across architectures to
 
 ## Model architectures
 
-The repository contains five three-dimensional segmentation architectures:
+The `src/models/` directory contains the five 3D segmentation architectures, alongside a factory script used to unify and generalize their initialization within the experimental pipeline:
 
 ```text
 src/models/
-├── get_model.py
-├── segresnet.py
-├── segmamba.py
-├── segmamba_v2.py
-├── swin_unetr.py
-└── unet3d.py
+├── get_model.py       # Centralized factory script to dynamically load any model
+├── segresnet.py       # SegResNet architecture
+├── segmamba.py        # SegMamba architecture
+├── segmamba_v2.py     # SegMamba v2 architecture
+├── swin_unetr.py      # Swin UNETR architecture
+└── unet3d.py          # 3D U-Net architecture
 ```
 
 ### 3D U-Net
@@ -139,9 +139,9 @@ A Transformer-based architecture combining a hierarchical Swin Transformer encod
 
 A State Space Model architecture based on Mamba blocks designed to capture long-range dependencies with a lower computational complexity than conventional self-attention mechanisms.
 
-### SegMambaV2
+### SegMamba-V2
 
-An updated Mamba-based architecture combining convolutional and State Space components with hierarchical downsampling and orthogonal-oriented Mamba blocks.
+An updated Mamba-based architecture combining convolutional and State Space components with hierarchical downsampling and multi-directional Mamba blocks.
 
 ---
 
@@ -188,17 +188,13 @@ This allows the architectures to be compared not only according to their predict
 
 ---
 
-## Statistical analysis
+## Analysis and visualization scripts
 
-The repository includes scripts for aggregating cross-validation results and performing statistical analyses.
+The `scripts/` directory contains several utility scripts for data exploration, result aggregation, and qualitative visualization. These include:
 
-The statistical analysis is used to determine whether differences observed between architectures are meaningful rather than simply caused by variability between experimental folds.
-
-Cross-validation results can be aggregated and analyzed using the scripts available in:
-
-```text
-scripts/
-```
+- **Exploratory Data Analysis (EDA):** Scripts to explore and understand the datasets prior to training.
+- **Cross-validation summaries:** Tools to aggregate and summarize the evaluation metrics across all experimental folds.
+- **Segmentation visualization:** Scripts to generate 2D and 3D figures of the MRI volumes, comparing the ground truth with the predicted segmentation masks.
 
 ---
 
@@ -216,10 +212,6 @@ unified-brats-benchmark/
 │   │   ├── dataset.py
 │   │   ├── splits.py
 │   │   └── transforms.py
-│   ├── eda/                     # Exploratory data analysis
-│   │   ├── main_eda.py
-│   │   ├── metadata_eda.py
-│   │   └── utils.py
 │   ├── models/                  # 3D segmentation architectures
 │   │   ├── get_model.py
 │   │   ├── segresnet.py
@@ -228,20 +220,22 @@ unified-brats-benchmark/
 │   │   ├── swin_unetr.py
 │   │   └── unet3d.py
 │   └── utils/                   # Shared project utilities
-│       ├── brats_lesionwise.py
 │       ├── brats_regions.py
 │       ├── checkpoints.py
+│       ├── lesionwise_controller.py
 │       ├── meters.py
+│       ├── metrics_GLI.py
+│       ├── metrics_MEN.py
 │       └── seed.py
-├── scripts/                     # Result analysis and visualization scripts
-│   ├── analyze_crossval_statistics.py
-│   ├── compare_background_results.py
+├── scripts/                     # Result analysis and visualization
+│   ├── create_2d_axial_models_region_grid.py
 │   ├── create_3d_models_region_grid.py
+│   ├── generate_brats_figures.py
 │   ├── generate_crossval_results.py
-│   ├── plot_crossval_results.py
 │   └── utils_results.py
 ├── docs/                        # Additional documentation
-│   └── segmamba_notes.md        # SegMamba installation and compatibility notes
+│   ├── segmamba_notes.md        # SegMamba installation and compatibility notes
+│   └── segmambav2_notes.md      # SegMamba-V2 installation and compatibility notes
 ├── requirements.txt             # Python dependencies
 ├── LICENSE                      # Project license
 ├── NOTICE                       # Third-party code attributions
@@ -286,6 +280,10 @@ Additional libraries include:
 
 ## Installation
 
+The baseline architectures (**3D U-Net**, **SegResNet**, and **Swin UNETR**) can be installed and trained using a single Python virtual environment.
+
+However, **SegMamba** and **SegMamba-V2** require specific dependency configurations and compatibility adjustments. Therefore, they should be installed in dedicated virtual environments.
+
 Create and activate a Python virtual environment:
 
 ```bash
@@ -308,33 +306,50 @@ pip install -r requirements.txt
 
 The `requirements.txt` file uses the PyTorch build with CUDA 12.8 support.
 
-> **Note:** Running SegMamba and SegMambaV2 requires additional dependencies and local compilation steps. These are described in `docs/segmamba_notes.md`.
-
-In particular, `causal-conv1d` and `mamba-ssm` were compiled locally to ensure compatibility with the NVIDIA RTX 5090 and the selected CUDA/PyTorch environment.
+> **Note:** The installation procedures for **SegMamba** and **SegMamba-V2** differ and should be performed in separate virtual environments. Additional setup instructions are provided in:
+>
+> - `docs/segmamba_notes.md`
+> - `docs/segmambav2_notes.md`
 
 ---
 
 ## Configuration
 
-The main configuration file is:
+The default project configuration is defined in:
 
 ```text
 src/config.py
 ```
 
-It contains the project paths, dataset configuration, training parameters, model configuration, cross-validation settings, and evaluation options.
+This file contains the default paths, dataset-specific settings, training hyperparameters, cross-validation configuration, caching options, and hardware settings.
 
-Before running an experiment, check the following settings:
+The dataset and model are selected at runtime through command-line arguments:
 
-* dataset paths;
-* output directories;
-* selected architecture;
-* training hyperparameters;
-* cross-validation configuration;
-* evaluation configuration.
+```bash
+python -m src.main --dataset 2023 --model swin_unetr
+```
+
+If no arguments are provided, the default configuration is used:
+
+- Dataset: `2023`
+- Model: `swin_unetr`
+
+The available datasets are:
+
+- `2023`
+- `2024`
+
+The available models are:
+
+- `unet3d`
+- `segresnet`
+- `swin_unetr`
+- `segmamba`
+- `segmambav2`
+
+Other training parameters (learning rate, number of workers, gradient clipping, cross-validation settings, ROI size, etc.) are automatically selected according to the chosen model and dataset, using the defaults defined in `src/config.py`.
 
 ---
-
 ## Usage
 
 Run the complete experimental pipeline from the project root:
@@ -343,33 +358,70 @@ Run the complete experimental pipeline from the project root:
 python -m src.main
 ```
 
-By default, the execution mode is `all`, which performs both training and evaluation.
+By default, this command runs the complete cross-validation pipeline using:
 
-### Train and evaluate a specific fold
+- Dataset: `2023`
+- Model: `swin_unetr`
+- Mode: `all` (training followed by evaluation)
+
+The dataset and model can be selected through command-line arguments.
+
+### Run a specific dataset and model
+
+For example, to train and evaluate SegResNet on the BraTS 2024 dataset:
 
 ```bash
-python -m src.main --fold 1
+python -m src.main --dataset 2024 --model segresnet
 ```
 
-### Train only
+The available datasets are:
+
+- `2023`
+- `2024`
+
+The available models are:
+
+- `unet3d`
+- `segresnet`
+- `swin_unetr`
+- `segmamba`
+- `segmambav2`
+
+### Execution modes
+
+Run the complete pipeline (training and evaluation):
+
+```bash
+python -m src.main --mode all
+```
+
+Train only:
 
 ```bash
 python -m src.main --mode train
 ```
 
-### Train a specific fold
-
-```bash
-python -m src.main --mode train --fold 1
-```
-
-### Evaluate trained models
+Evaluate previously trained models:
 
 ```bash
 python -m src.main --mode test
 ```
 
-### Evaluate a specific fold
+### Run a specific fold
+
+Train and evaluate only fold 1:
+
+```bash
+python -m src.main --fold 1
+```
+
+Train only fold 1:
+
+```bash
+python -m src.main --mode train --fold 1
+```
+
+Evaluate only fold 1:
 
 ```bash
 python -m src.main --mode test --fold 1
@@ -377,43 +429,29 @@ python -m src.main --mode test --fold 1
 
 ### Include or exclude the background class
 
-Experiments can be executed with or without including the background class in the loss:
+The background class can be included or excluded from the loss function:
 
 ```bash
 python -m src.main --include-background
 python -m src.main --no-include-background
 ```
 
-These options can also be combined with other execution parameters:
+These options can be combined with the dataset, model, execution mode, and fold selection. For example:
 
 ```bash
-python -m src.main --mode train --fold 1 --include-background
-python -m src.main --mode test --fold 1 --no-include-background
+python -m src.main \
+    --dataset 2024 \
+    --model segmambav2 \
+    --mode train \
+    --fold 1 \
+    --no-include-background
 ```
-
----
-
-## Result analysis scripts
-
-The `scripts/` directory contains utilities for aggregating, analyzing, and visualizing experimental results.
-
-Examples:
-
-```bash
-python scripts/generate_crossval_results.py
-python scripts/analyze_crossval_statistics.py
-python scripts/compare_background_results.py
-python scripts/plot_crossval_results.py
-python scripts/create_3d_models_region_grid.py
-```
-
-These scripts can be used to process the results generated during cross-validation and to produce quantitative and qualitative analyses.
 
 ---
 
 ## Third-party code and attribution
 
-This project includes or adapts code from external open-source projects, including components related to SegMamba and BraTS evaluation utilities.
+This project includes or adapts code from external open-source projects, including components related to SegMamba, SegMamba-V2, and BraTS evaluation utilities.
 
 See the `NOTICE` file for detailed third-party attributions and licensing information.
 

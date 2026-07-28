@@ -123,12 +123,6 @@ MODEL_TRAINING_CONFIGS = {
         "grad_clip_max_norm": None,
         "num_workers": 4,
     },
-    "resunet3d": {
-        "learning_rate": 1e-4,
-        "clip_grad": False,
-        "grad_clip_max_norm": None,
-        "num_workers": 4,
-    },
     "segresnet": {
         "learning_rate": 1e-4,
         "clip_grad": False,
@@ -208,5 +202,3 @@ EXPERIMENT_NAME = (
 )
 
 EXPERIMENT_DIR = EXPERIMENTS_DIR / EXPERIMENT_NAME
-
-
