@@ -427,7 +427,10 @@ def test_fold(
             roi_size=ROI_SIZE,
             sw_batch_size=SW_BATCH_SIZE,
             output_dir=fold_dir / "test_eval",
+            model_name=MODEL_NAME,
+            fold_idx=fold_idx,
         )
+
 
         test_mem = (
             torch.cuda.max_memory_allocated() / (1024**2)

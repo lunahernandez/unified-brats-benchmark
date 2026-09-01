@@ -1,7 +1,6 @@
 from torch.nn import Module
 
 from src.models.unet3d import build_unet3d
-from src.models.resunet3d import build_resunet3d
 from src.models.segresnet import build_segresnet
 from src.models.swin_unetr import build_swin_unetr
 from src.models.segmamba import SegMamba

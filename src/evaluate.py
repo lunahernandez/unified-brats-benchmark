@@ -346,8 +346,10 @@ def update_lesionwise_iou_metric_store(
     iou_store: dict[str, list[float]],
     dilation_iterations: int = 1,
     min_lesion_size: int = 0,
-) -> None:
-    """Update lesion-wise IoU values from one prediction and ground truth."""
+) -> dict[str, float]:
+    """Update lesion-wise IoU values and return the values for one case."""
+    case_ious: dict[str, float] = {}
+
     for region_name, values in region_values.items():
         pred_mask = create_binary_region_mask(
             label_map=pred_label_map,
@@ -358,7 +360,6 @@ def update_lesionwise_iou_metric_store(
             region_values=values,
         )
 
-
         iou = calculate_lesionwise_iou(
             pred_mask=pred_mask,
             gt_mask=gt_mask,
@@ -367,8 +368,13 @@ def update_lesionwise_iou_metric_store(
             penalize_fp=True,
         )
 
+        iou = float(iou)
 
-        iou_store[region_name].append(float(iou))
+        iou_store[region_name].append(iou)
+        case_ious[region_name] = iou
+
+    return case_ious
+
 
 
 
@@ -709,6 +715,33 @@ def summarize_global_metrics(
     }
 
 
+def metric_values_for_case(
+    metric_output: torch.Tensor,
+    case_index: int,
+) -> list[float | None]:
+    """Extract per-label metric values for one case from a MONAI metric output."""
+    values = metric_output.detach().cpu().numpy()
+
+    if values.ndim == 1:
+        row = values
+    else:
+        row = values[case_index]
+
+    row = np.asarray(row).reshape(-1)
+
+    result: list[float | None] = []
+
+    for value in row:
+        value = float(value)
+
+        if np.isnan(value):
+            result.append(None)
+        else:
+            result.append(value)
+
+    return result
+
+
 
 
 
@@ -720,7 +753,10 @@ def evaluate_test(
     roi_size: tuple[int, int, int],
     sw_batch_size: int,
     output_dir: Path,
+    model_name: str | None = None,
+    fold_idx: int | None = None,
 ) -> dict[str, Any]:
+
     """Evaluate a model on the test set using lesion-wise metrics."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -738,6 +774,30 @@ def evaluate_test(
 
 
     inference_times: list[float] = []
+
+    per_case_records: list[dict[str, Any]] = []
+
+    if dataset == "2023":
+        voxel_class_names = [
+            "NETC",
+            "SNFH",
+            "ET",
+        ]
+    else:
+        voxel_class_names = [
+            "NETC",
+            "SNFH",
+            "ET",
+            "RC",
+        ]
+
+    voxel_region_names = [
+        "ET",
+        "TC",
+        "WT",
+    ]
+
+
     model.eval()
 
     num_classes = 4 if dataset == "2023" else 5
@@ -826,9 +886,21 @@ def evaluate_test(
                 outputs_list = [post_pred(i) for i in decollate_batch(logits)]
                 labels_list = [post_label(i) for i in decollate_batch(labels)]
 
-                dice_metric_cls(outputs_list, labels_list)
-                iou_metric_cls(outputs_list, labels_list)
-                hd95_metric_cls(outputs_list, labels_list)
+                batch_dice_cls = dice_metric_cls(
+                    outputs_list,
+                    labels_list,
+                )
+
+                batch_iou_cls = iou_metric_cls(
+                    outputs_list,
+                    labels_list,
+                )
+
+                batch_hd95_cls = hd95_metric_cls(
+                    outputs_list,
+                    labels_list,
+                )
+
 
                 outputs_regions = [
                     convert_to_brats_regions(i)
@@ -840,9 +912,21 @@ def evaluate_test(
                     for i in labels_list
                 ]
 
-                dice_metric_reg(outputs_regions, labels_regions)
-                iou_metric_reg(outputs_regions, labels_regions)
-                hd95_metric_reg(outputs_regions, labels_regions)
+                batch_dice_reg = dice_metric_reg(
+                    outputs_regions,
+                    labels_regions,
+                )
+
+                batch_iou_reg = iou_metric_reg(
+                    outputs_regions,
+                    labels_regions,
+                )
+
+                batch_hd95_reg = hd95_metric_reg(
+                    outputs_regions,
+                    labels_regions,
+                )
+
 
                 pred_maps = tensor_to_label_maps(logits)
                 gt_maps = tensor_to_label_maps(labels)
@@ -853,19 +937,29 @@ def evaluate_test(
 
 
                 for item_index in range(batch_size):
-                    case_id = extract_case_id(batch, item_index)
-                    case_id = case_id.replace(".nii.gz", "").replace(".nii", "")
-                    case_id = f"batch{batch_index:04d}_{item_index:02d}_{case_id}"
+                    raw_case_id = extract_case_id(
+                        batch,
+                        item_index,
+                    )
 
+                    raw_case_id = (
+                        raw_case_id
+                        .replace(".nii.gz", "")
+                        .replace(".nii", "")
+                    )
+
+                    file_case_id = (
+                        f"batch{batch_index:04d}_"
+                        f"{item_index:02d}_"
+                        f"{raw_case_id}"
+                    )
 
                     affine = extract_affine(batch, item_index)
                     pred_map = pred_maps[item_index]
                     gt_map = gt_maps[item_index]
 
-
-                    pred_path = prediction_dir / f"{case_id}_pred.nii.gz"
-                    gt_path = ground_truth_dir / f"{case_id}_gt.nii.gz"
-
+                    pred_path = prediction_dir / f"{file_case_id}_pred.nii.gz"
+                    gt_path = ground_truth_dir / f"{file_case_id}_gt.nii.gz"
 
                     save_label_map(pred_path, pred_map, affine)
                     save_label_map(gt_path, gt_map, affine)
@@ -884,8 +978,7 @@ def evaluate_test(
                         metric_store=metric_store,
                     )
 
-
-                    update_lesionwise_iou_metric_store(
+                    case_ious = update_lesionwise_iou_metric_store(
                         pred_label_map=pred_map,
                         gt_label_map=gt_map,
                         region_values=config.region_values,
@@ -893,6 +986,178 @@ def evaluate_test(
                         dilation_iterations=1,
                         min_lesion_size=0,
                     )
+
+                    case_record: dict[str, Any] = {
+                        "case_id": raw_case_id,
+                        "dataset": dataset,
+                        "model": model_name,
+                        "fold": fold_idx,
+                    }
+
+
+                    # ---------------------------------------------------------
+                    # VOXEL-WISE CLASSES
+                    # ---------------------------------------------------------
+
+                    voxel_class_dice = metric_values_for_case(
+                        batch_dice_cls,
+                        item_index,
+                    )
+
+                    voxel_class_iou = metric_values_for_case(
+                        batch_iou_cls,
+                        item_index,
+                    )
+
+                    voxel_class_hd95 = metric_values_for_case(
+                        batch_hd95_cls,
+                        item_index,
+                    )
+
+
+                    for label_name, dice, iou, hd95 in zip(
+                        voxel_class_names,
+                        voxel_class_dice,
+                        voxel_class_iou,
+                        voxel_class_hd95,
+                    ):
+                        case_record[f"voxel_class_{label_name}_dice"] = dice
+                        case_record[f"voxel_class_{label_name}_iou"] = iou
+                        case_record[f"voxel_class_{label_name}_hd95"] = hd95
+
+
+                    case_record["voxel_global_classes_dice"] = get_mean(
+                        voxel_class_dice
+                    )
+
+                    case_record["voxel_global_classes_iou"] = get_mean(
+                        voxel_class_iou
+                    )
+
+                    case_record["voxel_global_classes_hd95"] = get_mean(
+                        voxel_class_hd95
+                    )
+
+
+                    # ---------------------------------------------------------
+                    # VOXEL-WISE REGIONS
+                    # ---------------------------------------------------------
+
+                    voxel_region_dice = metric_values_for_case(
+                        batch_dice_reg,
+                        item_index,
+                    )
+
+                    voxel_region_iou = metric_values_for_case(
+                        batch_iou_reg,
+                        item_index,
+                    )
+
+                    voxel_region_hd95 = metric_values_for_case(
+                        batch_hd95_reg,
+                        item_index,
+                    )
+
+
+                    for region_name, dice, iou, hd95 in zip(
+                        voxel_region_names,
+                        voxel_region_dice,
+                        voxel_region_iou,
+                        voxel_region_hd95,
+                    ):
+                        case_record[f"voxel_region_{region_name}_dice"] = dice
+                        case_record[f"voxel_region_{region_name}_iou"] = iou
+                        case_record[f"voxel_region_{region_name}_hd95"] = hd95
+
+
+                    case_record["voxel_global_regions_dice"] = get_mean(
+                        voxel_region_dice
+                    )
+
+                    case_record["voxel_global_regions_iou"] = get_mean(
+                        voxel_region_iou
+                    )
+
+                    case_record["voxel_global_regions_hd95"] = get_mean(
+                        voxel_region_hd95
+                    )
+
+
+                    # ---------------------------------------------------------
+                    # LESION-WISE
+                    # ---------------------------------------------------------
+
+                    for _, row in results_df.iterrows():
+                        label_name = str(row["Labels"])
+
+                        if label_name not in config.labels:
+                            continue
+
+                        dice_value = row["LesionWise_Score_Dice"]
+                        hd95_value = row["LesionWise_Score_HD95"]
+
+                        case_record[f"lesion_{label_name}_dice"] = (
+                            None
+                            if pd.isna(dice_value)
+                            else float(dice_value)
+                        )
+
+                        case_record[f"lesion_{label_name}_hd95"] = (
+                            None
+                            if pd.isna(hd95_value)
+                            else float(hd95_value)
+                        )
+
+                        case_record[f"lesion_{label_name}_iou"] = (
+                            case_ious.get(label_name)
+                        )
+
+
+                    # ---------------------------------------------------------
+                    # LESION-WISE GLOBAL CLASSES
+                    # ---------------------------------------------------------
+
+                    case_record["lesion_global_classes_dice"] = get_mean(
+                        case_record.get(f"lesion_{label}_dice")
+                        for label in voxel_class_names
+                    )
+
+                    case_record["lesion_global_classes_iou"] = get_mean(
+                        case_record.get(f"lesion_{label}_iou")
+                        for label in voxel_class_names
+                    )
+
+                    case_record["lesion_global_classes_hd95"] = get_mean(
+                        case_record.get(f"lesion_{label}_hd95")
+                        for label in voxel_class_names
+                    )
+
+
+                    # ---------------------------------------------------------
+                    # LESION-WISE GLOBAL REGIONS
+                    # ---------------------------------------------------------
+
+                    case_record["lesion_global_regions_dice"] = get_mean(
+                        case_record.get(f"lesion_{region}_dice")
+                        for region in voxel_region_names
+                    )
+
+                    case_record["lesion_global_regions_iou"] = get_mean(
+                        case_record.get(f"lesion_{region}_iou")
+                        for region in voxel_region_names
+                    )
+
+                    case_record["lesion_global_regions_hd95"] = get_mean(
+                        case_record.get(f"lesion_{region}_hd95")
+                        for region in voxel_region_names
+                    )
+
+
+                    per_case_records.append(case_record)
+
+
+
+
                     
                     pred_path.unlink(missing_ok=True)
                     gt_path.unlink(missing_ok=True)
@@ -901,13 +1166,31 @@ def evaluate_test(
                     progress_bar.set_postfix(
                         {
                             "avg_inf_s": f"{avg_time:.2f}",
-                            "case": case_id[-24:],
+                            "case": raw_case_id[-24:],
                         }
                     )
                     progress_bar.update(1)
 
 
     progress_bar.close()
+
+    per_case_df = pd.DataFrame(per_case_records)
+
+    per_case_csv_path = (
+        output_dir
+        / "per_case_metrics.csv"
+    )
+
+    per_case_df.to_csv(
+        per_case_csv_path,
+        index=False,
+    )
+
+    print(
+        f"Per-case metrics saved to: "
+        f"{per_case_csv_path}"
+    )
+
 
 
     by_label, mean_dice, mean_hd95 = summarize_lesionwise_metric_store(
@@ -931,34 +1214,6 @@ def evaluate_test(
     dice_reg = dice_reg_tensor.cpu().numpy()
     iou_reg = iou_reg_tensor.cpu().numpy()
     hd95_reg = hd95_reg_tensor.cpu().numpy()
-
-    mean_dice_cls = float(torch.nanmean(dice_cls_tensor))
-    mean_iou_cls = float(torch.nanmean(iou_cls_tensor))
-    mean_hd95_cls = float(torch.nanmean(hd95_cls_tensor))
-
-    if dataset == "2023":
-
-        voxel_class_names = [
-            "NETC",
-            "SNFH",
-            "ET",
-        ]
-
-    else:
-
-        voxel_class_names = [
-            "NETC",
-            "SNFH",
-            "ET",
-            "RC",
-        ]
-
-
-    voxel_region_names = [
-        "ET",
-        "TC",
-        "WT",
-    ]
 
     voxelwise_classes = summarize_voxelwise_metrics(
         dice=dice_cls,

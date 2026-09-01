@@ -8,23 +8,6 @@ For each dataset, the script generates:
 4. Meningioma grade distribution or glioma type distribution
 5. Tumor subregion frequency
 6. Tumor subregion volume distribution
-
-Examples:
-
-BraTS 2023:
-python scripts/generate_brats_figures.py 2023 \
-  --data-dir "data/brats2023/training_data" \
-  --clinical-file "data/brats2023/clinical_data.xlsx" \
-  --output-dir "figures/eda_article" \
-  --patient-id "BraTS-MEN-00010-000"
-
-BraTS 2024:
-python scripts/generate_brats_figures.py 2024 \
-  --data-dir "data/training_data1_v2" \
-  --clinical-file "data/BraTS-PTG supplementary demographic information and metadata.xlsx" \
-  --output-dir "figures/eda_article" \
-  --patient-id "BraTS-GLI-03063-100" \
-  --category-col "Tumor Type"
 """
 
 from __future__ import annotations
@@ -53,14 +36,14 @@ def configure_publication_style() -> None:
     plt.rcParams.update(
         {
             "font.family": "DejaVu Sans",
-            "font.size": 16,             # Modificado (antes 12)
-            "axes.titlesize": 18,        # Modificado (antes 13)
+            "font.size": 22,
+            "axes.titlesize": 28,
             "axes.titleweight": "semibold",
-            "axes.titlepad": 8,
-            "axes.labelsize": 16,        # Modificado (antes 12)
-            "xtick.labelsize": 14,       # Modificado (antes 11)
-            "ytick.labelsize": 14,       # Modificado (antes 11)
-            "figure.titlesize": 22,      # Modificado (antes 17)
+            "axes.titlepad": 12,
+            "axes.labelsize": 24,
+            "xtick.labelsize": 20,
+            "ytick.labelsize": 20,
+            "figure.titlesize": 32,
             "figure.titleweight": "bold",
             "savefig.dpi": 300,
             "svg.fonttype": "none",
@@ -74,7 +57,11 @@ def configure_publication_style() -> None:
 # ---------------------------------------------------------------------
 
 
-def load_volume(case_dir: Path, patient_id: str, suffix: str) -> np.ndarray:
+def load_volume(
+    case_dir: Path,
+    patient_id: str,
+    suffix: str,
+) -> np.ndarray:
     """
     Load a NIfTI volume following the BraTS naming convention.
 
@@ -104,6 +91,7 @@ def normalize_for_display(image: np.ndarray) -> np.ndarray:
         return np.zeros_like(image, dtype=float)
 
     normalized = (image - lower) / (upper - lower)
+
     return np.clip(normalized, 0, 1)
 
 
@@ -115,6 +103,7 @@ def normalize_key(value: str) -> str:
     value = unicodedata.normalize("NFKD", value)
     value = value.encode("ascii", "ignore").decode("utf-8")
     value = re.sub(r"[^a-z0-9]+", "", value)
+
     return value
 
 
@@ -148,7 +137,9 @@ def read_clinical_file(file_path: Path) -> pd.DataFrame:
     Read clinical metadata from CSV, XLSX, or XLS.
     """
     if not file_path.exists():
-        raise FileNotFoundError(f"Clinical file not found: {file_path}")
+        raise FileNotFoundError(
+            f"Clinical file not found: {file_path}"
+        )
 
     suffix = file_path.suffix.lower()
 
@@ -163,11 +154,17 @@ def read_clinical_file(file_path: Path) -> pd.DataFrame:
     )
 
 
-def save_figure(fig: plt.Figure, output_path: Path) -> None:
+def save_figure(
+    fig: plt.Figure,
+    output_path: Path,
+) -> None:
     """
     Save a figure as SVG and PDF.
     """
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     fig.savefig(
         output_path.with_suffix(".svg"),
@@ -188,23 +185,46 @@ def save_figure(fig: plt.Figure, output_path: Path) -> None:
 
 def get_axial_tumor_slice(mask: np.ndarray) -> int:
     """
-    Select the axial slice containing the greatest number of segmented voxels.
+    Select the axial slice containing the greatest number
+    of segmented voxels.
     """
-    segmented_voxels_per_slice = np.sum(mask > 0, axis=(0, 1))
+    segmented_voxels_per_slice = np.sum(
+        mask > 0,
+        axis=(0, 1),
+    )
 
     if segmented_voxels_per_slice.max() == 0:
         return mask.shape[2] // 2
 
-    return int(np.argmax(segmented_voxels_per_slice))
+    return int(
+        np.argmax(segmented_voxels_per_slice)
+    )
 
 
-def get_plane_indices(mask: np.ndarray) -> tuple[int, int, int]:
+def get_plane_indices(
+    mask: np.ndarray,
+) -> tuple[int, int, int]:
     """
-    Select the sagittal, coronal, and axial slices with the largest tumor area.
+    Select sagittal, coronal, and axial slices with
+    the largest tumor area.
     """
-    sagittal_idx = int(np.argmax(np.sum(mask > 0, axis=(1, 2))))
-    coronal_idx = int(np.argmax(np.sum(mask > 0, axis=(0, 2))))
-    axial_idx = int(np.argmax(np.sum(mask > 0, axis=(0, 1))))
+    sagittal_idx = int(
+        np.argmax(
+            np.sum(mask > 0, axis=(1, 2))
+        )
+    )
+
+    coronal_idx = int(
+        np.argmax(
+            np.sum(mask > 0, axis=(0, 2))
+        )
+    )
+
+    axial_idx = int(
+        np.argmax(
+            np.sum(mask > 0, axis=(0, 1))
+        )
+    )
 
     return sagittal_idx, coronal_idx, axial_idx
 
@@ -213,7 +233,8 @@ def get_label_configuration(
     dataset: str,
 ) -> tuple[dict[int, str], dict[int, str]]:
     """
-    Return segmentation label names and colors for each BraTS dataset.
+    Return segmentation label names and colors
+    for each BraTS dataset.
     """
     if dataset == "2023":
         label_names = {
@@ -239,21 +260,260 @@ def get_label_configuration(
         }
 
         label_colors = {
-            1: "#FF5C5C",  # NETC
-            2: "#66F466",  # SNFH
-            3: "#7070DC",  # ET
-            4: "#FFFF5C",  # RC
+            1: "#FF5C5C",
+            2: "#66F466",
+            3: "#7070DC",
+            4: "#FFFF5C",
         }
-
 
         return label_names, label_colors
 
-    raise ValueError("Dataset must be '2023' or '2024'.")
+    raise ValueError(
+        "Dataset must be '2023' or '2024'."
+    )
+
+
+# ---------------------------------------------------------------------
+# DATASET / CLINICAL METADATA CONSISTENCY
+# ---------------------------------------------------------------------
+
+
+def get_dataset_patient_ids(
+    data_dirs: list[Path],
+) -> set[str]:
+    """
+    Collect unique patient IDs from the dataset directories.
+
+    Patient IDs are assumed to correspond to the patient-folder names.
+    """
+    patient_ids: set[str] = set()
+    duplicated_ids: set[str] = set()
+
+    total_folders = 0
+
+    print()
+    print("=" * 70)
+    print("DATASET PATIENT-ID CHECK")
+    print("=" * 70)
+
+    for data_dir in data_dirs:
+        if not data_dir.exists():
+            raise FileNotFoundError(
+                f"Dataset directory not found: {data_dir}"
+            )
+
+        directory_count = 0
+
+        for case_dir in data_dir.iterdir():
+            if not case_dir.is_dir():
+                continue
+
+            directory_count += 1
+            total_folders += 1
+
+            patient_id = case_dir.name.strip()
+
+            if patient_id in patient_ids:
+                duplicated_ids.add(patient_id)
+
+            patient_ids.add(patient_id)
+
+        print(
+            f"{data_dir.name}: {directory_count} patient folders"
+        )
+
+    print(f"Raw patient folders: {total_folders}")
+    print(
+        f"Unique patient IDs: {len(patient_ids)}"
+    )
+    print(
+        "Patient IDs appearing in more than one directory: "
+        f"{len(duplicated_ids)}"
+    )
+
+    if duplicated_ids:
+        print("\nDuplicated IDs:")
+
+        for patient_id in sorted(duplicated_ids):
+            print(f"  {patient_id}")
+
+    return patient_ids
+
+
+def filter_clinical_to_dataset(
+    clinical_df: pd.DataFrame,
+    data_dirs: list[Path],
+    patient_id_column: str | None = None,
+) -> pd.DataFrame:
+    """
+    Restrict clinical metadata to subjects actually present
+    in the dataset directories.
+
+    Also report:
+        - total clinical rows
+        - unique clinical IDs
+        - IDs present only in the clinical file
+        - dataset IDs missing from the clinical file
+        - duplicated IDs inside the final cohort
+    """
+    if patient_id_column is None:
+        patient_id_column = find_column(
+            clinical_df,
+            [
+                "Patient ID",
+                "PatientID",
+                "Subject ID",
+                "SubjectID",
+                "BraTS ID",
+                "BraTS Subject ID",
+                "BraTS 2024 Subject ID",
+                "Case ID",
+            ],
+        )
+
+    dataset_ids = get_dataset_patient_ids(
+        data_dirs
+    )
+
+    metadata = clinical_df.copy()
+
+    metadata[patient_id_column] = (
+        metadata[patient_id_column]
+        .astype("string")
+        .str.strip()
+    )
+
+    metadata_with_id = metadata[
+        metadata[patient_id_column].notna()
+        & (metadata[patient_id_column] != "")
+    ].copy()
+
+    clinical_ids = set(
+        metadata_with_id[
+            patient_id_column
+        ].tolist()
+    )
+
+    extra_clinical_ids = (
+        clinical_ids - dataset_ids
+    )
+
+    missing_clinical_ids = (
+        dataset_ids - clinical_ids
+    )
+
+    filtered_df = metadata_with_id[
+        metadata_with_id[
+            patient_id_column
+        ].isin(dataset_ids)
+    ].copy()
+
+    duplicated_filtered = filtered_df[
+        filtered_df[
+            patient_id_column
+        ].duplicated(keep=False)
+    ].sort_values(
+        patient_id_column
+    )
+
+    print()
+    print("=" * 70)
+    print("CLINICAL METADATA CHECK")
+    print("=" * 70)
+
+    print(
+        f"Clinical ID column: "
+        f"{patient_id_column}"
+    )
+
+    print(
+        f"Rows in original clinical file: "
+        f"{len(clinical_df)}"
+    )
+
+    print(
+        f"Rows with a valid patient ID: "
+        f"{len(metadata_with_id)}"
+    )
+
+    print(
+        f"Unique patient IDs in clinical file: "
+        f"{len(clinical_ids)}"
+    )
+
+    print(
+        f"Unique patient IDs in dataset: "
+        f"{len(dataset_ids)}"
+    )
+
+    print(
+        f"Clinical IDs not present in dataset: "
+        f"{len(extra_clinical_ids)}"
+    )
+
+    print(
+        f"Dataset IDs without clinical metadata: "
+        f"{len(missing_clinical_ids)}"
+    )
+
+    print(
+        f"Rows after restricting metadata to dataset: "
+        f"{len(filtered_df)}"
+    )
+
+    print(
+        "Duplicated patient IDs inside filtered cohort: "
+        f"{duplicated_filtered[patient_id_column].nunique()}"
+    )
+
+    if extra_clinical_ids:
+        print()
+        print(
+            "Clinical IDs outside the experimental cohort:"
+        )
+
+        for patient_id in sorted(
+            extra_clinical_ids
+        ):
+            print(f"  {patient_id}")
+
+    if missing_clinical_ids:
+        print()
+        print(
+            "Dataset IDs without clinical metadata:"
+        )
+
+        for patient_id in sorted(
+            missing_clinical_ids
+        ):
+            print(f"  {patient_id}")
+
+    if not duplicated_filtered.empty:
+        print()
+        print(
+            "Duplicated IDs inside the experimental cohort:"
+        )
+
+        print(
+            duplicated_filtered[
+                [patient_id_column]
+            ].to_string(index=False)
+        )
+
+        raise ValueError(
+            "Duplicated patient IDs were found in the "
+            "clinical metadata for subjects in the "
+            "experimental cohort. Inspect these records "
+            "before generating the clinical figures."
+        )
+
+    return filtered_df
 
 
 # ---------------------------------------------------------------------
 # FIGURE 1: MRI MODALITIES + BINARY MASK
 # ---------------------------------------------------------------------
+
 
 def find_case_dir(
     data_dirs: list[Path],
@@ -268,7 +528,10 @@ def find_case_dir(
         if case_dir.is_dir():
             return case_dir
 
-    searched_dirs = "\n".join(f" - {path}" for path in data_dirs)
+    searched_dirs = "\n".join(
+        f" - {path}"
+        for path in data_dirs
+    )
 
     raise FileNotFoundError(
         f"Patient folder not found for: {patient_id}\n"
@@ -286,20 +549,53 @@ def plot_modalities_with_mask(
     Create a 2x3 figure with MRI modalities, binary mask,
     and a single-color overlay on post-contrast T1w.
     """
-    case_dir = find_case_dir(data_dirs, patient_id)
+    case_dir = find_case_dir(
+        data_dirs,
+        patient_id,
+    )
 
     volumes = {
-        "Pre-contrast T1w": load_volume(case_dir, patient_id, "t1n"),
-        "Post-contrast T1w": load_volume(case_dir, patient_id, "t1c"),
-        "T2w": load_volume(case_dir, patient_id, "t2w"),
-        "T2-FLAIR": load_volume(case_dir, patient_id, "t2f"),
-        "Segmentation mask": load_volume(case_dir, patient_id, "seg"),
+        "Pre-contrast T1w": load_volume(
+            case_dir,
+            patient_id,
+            "t1n",
+        ),
+        "Post-contrast T1w": load_volume(
+            case_dir,
+            patient_id,
+            "t1c",
+        ),
+        "T2w": load_volume(
+            case_dir,
+            patient_id,
+            "t2w",
+        ),
+        "T2-FLAIR": load_volume(
+            case_dir,
+            patient_id,
+            "t2f",
+        ),
+        "Segmentation mask": load_volume(
+            case_dir,
+            patient_id,
+            "seg",
+        ),
     }
 
-    segmentation = volumes["Segmentation mask"]
-    slice_idx = get_axial_tumor_slice(segmentation)
+    segmentation = volumes[
+        "Segmentation mask"
+    ]
 
-    fig, axes = plt.subplots(2, 3, figsize=(15.5, 9))
+    slice_idx = get_axial_tumor_slice(
+        segmentation
+    )
+
+    fig, axes = plt.subplots(
+        2,
+        3,
+        figsize=(30, 18),
+    )
+
     axes = axes.ravel()
 
     display_names = [
@@ -310,11 +606,19 @@ def plot_modalities_with_mask(
         "Segmentation mask",
     ]
 
-    for index, name in enumerate(display_names):
-        image_slice = volumes[name][:, :, slice_idx]
+    for index, name in enumerate(
+        display_names
+    ):
+        image_slice = volumes[name][
+            :,
+            :,
+            slice_idx,
+        ]
 
         if name == "Segmentation mask":
-            binary_mask = (image_slice > 0).astype(float)
+            binary_mask = (
+                image_slice > 0
+            ).astype(float)
 
             axes[index].imshow(
                 np.rot90(binary_mask),
@@ -324,28 +628,59 @@ def plot_modalities_with_mask(
                 interpolation="nearest",
                 origin="upper",
             )
+
         else:
             axes[index].imshow(
-                np.rot90(normalize_for_display(image_slice)),
+                np.rot90(
+                    normalize_for_display(
+                        image_slice
+                    )
+                ),
                 cmap="gray",
                 origin="upper",
             )
 
-        axes[index].set_title(name)
+        axes[index].set_title(
+            name,
+            fontsize=40,
+        )
+
         axes[index].axis("off")
 
-    t1c_slice = volumes["Post-contrast T1w"][:, :, slice_idx]
-    mask_slice = segmentation[:, :, slice_idx]
+    t1c_slice = volumes[
+        "Post-contrast T1w"
+    ][:, :, slice_idx]
+
+    mask_slice = segmentation[
+        :,
+        :,
+        slice_idx,
+    ]
 
     axes[5].imshow(
-        np.rot90(normalize_for_display(t1c_slice)),
+        np.rot90(
+            normalize_for_display(
+                t1c_slice
+            )
+        ),
         cmap="gray",
         origin="upper",
     )
 
-    overlay_rgba = np.zeros(mask_slice.shape + (4,), dtype=float)
-    overlay_rgba[..., :3] = to_rgba("#9191E9")[:3]
-    overlay_rgba[..., 3] = np.where(mask_slice > 0, 0.70, 0.0)
+    overlay_rgba = np.zeros(
+        mask_slice.shape + (4,),
+        dtype=float,
+    )
+
+    overlay_rgba[..., :3] = (
+        to_rgba("#9191E9")[:3]
+    )
+
+    overlay_rgba[..., 3] = np.where(
+        mask_slice > 0,
+        0.70,
+        0.0,
+    )
 
     axes[5].imshow(
         np.rot90(overlay_rgba),
@@ -354,30 +689,29 @@ def plot_modalities_with_mask(
         zorder=2,
     )
 
-    axes[5].set_title("Mask over post-contrast T1w")
+    axes[5].set_title(
+        "Mask over post-contrast T1w",
+        fontsize=40,
+    )
+
     axes[5].axis("off")
 
-    fig.suptitle(
-        f"BraTS {dataset} | {patient_id}",
-        y=0.96,
-    )
+    # No global "BraTS 2023/2024" title.
 
     fig.subplots_adjust(
         left=0.03,
         right=0.98,
         bottom=0.05,
         top=0.89,
-        wspace=0.18,
-        hspace=0.20,
+        wspace=0.15,
+        hspace=0.15,
     )
 
     save_figure(
         fig,
-        output_dir / f"{patient_id}_modalities_mask",
+        output_dir
+        / f"{patient_id}_modalities_mask",
     )
-
-
-
 
 
 # ---------------------------------------------------------------------
@@ -395,39 +729,92 @@ def plot_planes_with_mask(
     Create sagittal, coronal, and axial post-contrast T1w views
     with segmentation masks.
     """
-    case_dir = find_case_dir(data_dirs, patient_id)
+    case_dir = find_case_dir(
+        data_dirs,
+        patient_id,
+    )
 
-    segmentation = load_volume(case_dir, patient_id, "seg")
-    t1c = load_volume(case_dir, patient_id, "t1c")
+    segmentation = load_volume(
+        case_dir,
+        patient_id,
+        "seg",
+    )
 
-    sagittal_idx, coronal_idx, axial_idx = get_plane_indices(segmentation)
+    t1c = load_volume(
+        case_dir,
+        patient_id,
+        "t1c",
+    )
+
+    (
+        sagittal_idx,
+        coronal_idx,
+        axial_idx,
+    ) = get_plane_indices(
+        segmentation
+    )
 
     views = [
         (
             "Sagittal view",
             sagittal_idx,
-            t1c[sagittal_idx, :, :].T,
-            segmentation[sagittal_idx, :, :].T,
+            t1c[
+                sagittal_idx,
+                :,
+                :,
+            ].T,
+            segmentation[
+                sagittal_idx,
+                :,
+                :,
+            ].T,
         ),
         (
             "Coronal view",
             coronal_idx,
-            t1c[:, coronal_idx, :].T,
-            segmentation[:, coronal_idx, :].T,
+            t1c[
+                :,
+                coronal_idx,
+                :,
+            ].T,
+            segmentation[
+                :,
+                coronal_idx,
+                :,
+            ].T,
         ),
         (
             "Axial view",
             axial_idx,
-            t1c[:, :, axial_idx].T,
-            segmentation[:, :, axial_idx].T,
+            t1c[
+                :,
+                :,
+                axial_idx,
+            ].T,
+            segmentation[
+                :,
+                :,
+                axial_idx,
+            ].T,
         ),
     ]
 
-    label_names, label_colors = get_label_configuration(dataset)
-    sorted_labels = sorted(label_colors.keys())
+    (
+        label_names,
+        label_colors,
+    ) = get_label_configuration(
+        dataset
+    )
+
+    sorted_labels = sorted(
+        label_colors.keys()
+    )
 
     colormap = ListedColormap(
-        [label_colors[label] for label in sorted_labels]
+        [
+            label_colors[label]
+            for label in sorted_labels
+        ]
     )
 
     boundaries = np.arange(
@@ -436,20 +823,42 @@ def plot_planes_with_mask(
         1,
     )
 
-    norm = BoundaryNorm(boundaries, colormap.N)
+    norm = BoundaryNorm(
+        boundaries,
+        colormap.N,
+    )
 
-    fig, axes = plt.subplots(1, 3, figsize=(17, 7))
+    fig, axes = plt.subplots(
+        1,
+        3,
+        figsize=(24, 10),
+    )
 
-    for ax, (title, index, image_slice, mask_slice) in zip(axes, views):
+    for (
+        ax,
+        (
+            title,
+            index,
+            image_slice,
+            mask_slice,
+        ),
+    ) in zip(
+        axes,
+        views,
+    ):
         ax.imshow(
-            normalize_for_display(image_slice),
+            normalize_for_display(
+                image_slice
+            ),
             cmap="gray",
             origin="lower",
         )
 
-        masked_segmentation = np.ma.masked_where(
-            mask_slice == 0,
-            mask_slice,
+        masked_segmentation = (
+            np.ma.masked_where(
+                mask_slice == 0,
+                mask_slice,
+            )
         )
 
         ax.imshow(
@@ -461,7 +870,11 @@ def plot_planes_with_mask(
             interpolation="none",
         )
 
-        ax.set_title(f"{title} ({index})")
+        ax.set_title(
+            f"{title} ({index})",
+            fontsize=34,
+        )
+
         ax.axis("off")
 
     legend_handles = [
@@ -478,16 +891,12 @@ def plot_planes_with_mask(
         title="Tumor subregions",
         loc="lower center",
         ncol=len(sorted_labels),
-        fontsize=12,
-        title_fontsize=13,
+        fontsize=34,
+        title_fontsize=36,
         frameon=False,
     )
 
-    fig.suptitle(
-        f"BraTS {dataset} | {patient_id} | "
-        "Post-contrast T1w with segmentation mask",
-        y=0.97,
-    )
+    # No global "BraTS 2023/2024" title.
 
     fig.subplots_adjust(
         left=0.03,
@@ -499,10 +908,9 @@ def plot_planes_with_mask(
 
     save_figure(
         fig,
-        output_dir / f"{patient_id}_multiplanar_mask",
+        output_dir
+        / f"{patient_id}_multiplanar_mask",
     )
-
-
 
 
 # ---------------------------------------------------------------------
@@ -510,7 +918,9 @@ def plot_planes_with_mask(
 # ---------------------------------------------------------------------
 
 
-def translate_sex_values(series: pd.Series) -> pd.Series:
+def translate_sex_values(
+    series: pd.Series,
+) -> pd.Series:
     """
     Normalize common sex labels to English.
     """
@@ -526,11 +936,17 @@ def translate_sex_values(series: pd.Series) -> pd.Series:
     }
 
     return (
-        series.dropna()
+        series
+        .dropna()
         .astype(str)
         .str.strip()
         .str.lower()
-        .map(lambda value: mapping.get(value, value.title()))
+        .map(
+            lambda value: mapping.get(
+                value,
+                value.title(),
+            )
+        )
     )
 
 
@@ -565,30 +981,43 @@ def plot_sex_and_age(
             ],
         )
 
-    sex_data = translate_sex_values(clinical_df[sex_column])
+    sex_data = translate_sex_values(
+        clinical_df[sex_column]
+    )
 
     age_data = pd.to_numeric(
         clinical_df[age_column],
         errors="coerce",
     ).dropna()
 
-    fig, (ax_sex, ax_age) = plt.subplots(
+    fig, (
+        ax_sex,
+        ax_age,
+    ) = plt.subplots(
         1,
         2,
         figsize=(15, 6.5),
     )
 
-    sex_counts = sex_data.value_counts()
+    sex_counts = (
+        sex_data.value_counts()
+    )
 
     ax_sex.pie(
         sex_counts.values,
         labels=sex_counts.index,
         autopct="%1.1f%%",
         startangle=90,
-        textprops={"fontsize": 12},
+        textprops={
+            "fontsize": 22,
+        },
     )
 
-    ax_sex.set_title("Sex distribution")
+    ax_sex.set_title(
+        "Sex distribution",
+        fontsize=22,
+    )
+
     ax_sex.axis("equal")
 
     ax_age.hist(
@@ -598,13 +1027,28 @@ def plot_sex_and_age(
         linewidth=1.0,
     )
 
-    ax_age.set_title("Age distribution")
-    ax_age.set_xlabel("Age (years)")
-    ax_age.set_ylabel("Number of cases")
-    ax_age.grid(axis="y", linestyle="--", alpha=0.35)
+    ax_age.set_title(
+        "Age distribution",
+        fontsize=22,
+    )
+
+    ax_age.set_xlabel(
+        "Age (years)"
+    )
+
+    ax_age.set_ylabel(
+        "Number of cases"
+    )
+
+    ax_age.grid(
+        axis="y",
+        linestyle="--",
+        alpha=0.35,
+    )
+
     ax_age.set_axisbelow(True)
 
-    fig.suptitle(dataset_name, y=0.98)
+    # No global "BraTS 2023/2024" title.
 
     fig.subplots_adjust(
         left=0.07,
@@ -614,7 +1058,10 @@ def plot_sex_and_age(
         wspace=0.28,
     )
 
-    filename = f"{dataset_name.lower().replace(' ', '_')}_sex_age"
+    filename = (
+        f"{dataset_name.lower().replace(' ', '_')}"
+        "_sex_age"
+    )
 
     save_figure(
         fig,
@@ -625,6 +1072,7 @@ def plot_sex_and_age(
 # ---------------------------------------------------------------------
 # FIGURE 4: MENINGIOMA GRADE OR GLIOMA TYPE
 # ---------------------------------------------------------------------
+
 
 def plot_category_distribution(
     clinical_df: pd.DataFrame,
@@ -639,15 +1087,35 @@ def plot_category_distribution(
     """
     if category_type == "grade":
         data = pd.to_numeric(
-            clinical_df[category_column],
+            clinical_df[
+                category_column
+            ],
             errors="coerce",
         ).dropna().astype(int)
 
-        counts = data.value_counts().sort_index()
-        x_labels = [f"Grade {grade}" for grade in counts.index]
+        counts = (
+            data
+            .value_counts()
+            .sort_index()
+        )
+
+        x_labels = [
+            f"Grade {grade}"
+            for grade in counts.index
+        ]
+
         filename = "meningioma_grade"
 
     elif category_type == "type":
+        data = (
+            clinical_df[
+                category_column
+            ]
+            .dropna()
+            .astype(str)
+            .str.strip()
+        )
+
         data = (
             clinical_df[category_column]
             .dropna()
@@ -655,14 +1123,28 @@ def plot_category_distribution(
             .str.strip()
         )
 
+        data = data.replace(
+            {
+                "glioma NOS": "Glioma NOS",
+                "Glioma nos": "Glioma NOS",
+                "glioma nos": "Glioma NOS",
+            }
+        )
+
         counts = data.value_counts()
-        x_labels = counts.index.tolist()
+
+        x_labels = (
+            counts.index.tolist()
+        )
+
         filename = "glioma_type"
 
     else:
-        raise ValueError("category_type must be 'grade' or 'type'.")
+        raise ValueError(
+            "category_type must be "
+            "'grade' or 'type'."
+        )
 
-    # Discrete palette: one solid color per category.
     discrete_palette = [
         "#f25f5c",
         "#ffe066",
@@ -673,11 +1155,18 @@ def plot_category_distribution(
     ]
 
     bar_colors = [
-        discrete_palette[index % len(discrete_palette)]
-        for index in range(len(counts))
+        discrete_palette[
+            index % len(discrete_palette)
+        ]
+        for index in range(
+            len(counts)
+        )
     ]
 
-    fig, ax = plt.subplots(figsize=(10.5, 6.5))
+    # Keep the same publication size as the previous figure.
+    fig, ax = plt.subplots(
+        figsize=(15, 9.5)
+    )
 
     bars = ax.bar(
         x_labels,
@@ -687,38 +1176,84 @@ def plot_category_distribution(
         linewidth=0.8,
     )
 
-    ax.set_title(title)
-    ax.set_ylabel("Number of cases")
-    ax.grid(axis="y", linestyle="--", alpha=0.35)
+    # Only the actual figure title.
+    # No "BraTS 2024" suptitle.
+    ax.set_title(
+        title,
+        fontsize=32,
+    )
+
+    ax.set_ylabel(
+        "Number of cases",
+        fontsize=24,
+    )
+
+    ax.grid(
+        axis="y",
+        linestyle="--",
+        alpha=0.35,
+    )
+
     ax.set_axisbelow(True)
 
-    maximum = max(counts.values)
+    maximum = max(
+        counts.values
+    )
 
-    for bar, value in zip(bars, counts.values):
+    for bar, value in zip(
+        bars,
+        counts.values,
+    ):
         ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + maximum * 0.025,
+            bar.get_x()
+            + bar.get_width() / 2,
+            bar.get_height()
+            + maximum * 0.025,
             str(value),
             ha="center",
             va="bottom",
-            fontsize=11,
+            fontsize=28,
             fontweight="semibold",
         )
 
-    ax.set_ylim(0, maximum * 1.20)
+    ax.set_ylim(
+        0,
+        maximum * 1.20,
+    )
 
     if category_type == "type":
-        ax.tick_params(axis="x", labelrotation=20)
+        ax.tick_params(
+            axis="x",
+            labelrotation=20,
+            labelsize=28,
+        )
 
-        for label in ax.get_xticklabels():
-            label.set_horizontalalignment("right")
+        for label in (
+            ax.get_xticklabels()
+        ):
+            label.set_horizontalalignment(
+                "right"
+            )
 
-    fig.suptitle(dataset_name, y=0.98)
+    else:
+        ax.tick_params(
+            axis="x",
+            labelsize=28,
+        )
+
+    ax.tick_params(
+        axis="y",
+        labelsize=28,
+    )
 
     fig.subplots_adjust(
         left=0.10,
         right=0.97,
-        bottom=0.18 if category_type == "type" else 0.12,
+        bottom=(
+            0.18
+            if category_type == "type"
+            else 0.12
+        ),
         top=0.85,
     )
 
@@ -727,8 +1262,10 @@ def plot_category_distribution(
         output_dir / filename,
     )
 
+
 # ---------------------------------------------------------------------
-# FIGURES 5 AND 6: TUMOR SUBREGION FREQUENCY AND VOLUME DISTRIBUTION
+# FIGURES 5 AND 6:
+# TUMOR SUBREGION FREQUENCY AND VOLUME DISTRIBUTION
 # ---------------------------------------------------------------------
 
 
@@ -737,26 +1274,35 @@ def collect_subregion_statistics(
     dataset: str,
 ) -> pd.DataFrame:
     """
-    Compute voxel counts and case-level presence across multiple dataset paths.
-
-    Each directory is processed independently, matching the behaviour
-    of the previous implementation.
+    Compute voxel counts and case-level presence
+    across multiple dataset paths.
     """
-    label_names, _ = get_label_configuration(dataset)
+    label_names, _ = (
+        get_label_configuration(
+            dataset
+        )
+    )
 
-    records: list[dict[str, int | bool | str]] = []
+    records: list[
+        dict[str, int | bool | str]
+    ] = []
 
     for data_dir in data_dirs:
         if not data_dir.exists():
             raise FileNotFoundError(
-                f"Dataset directory not found: {data_dir}"
+                "Dataset directory not found: "
+                f"{data_dir}"
             )
 
-        for case_dir in sorted(data_dir.iterdir()):
+        for case_dir in sorted(
+            data_dir.iterdir()
+        ):
             if not case_dir.is_dir():
                 continue
 
-            patient_id = case_dir.name
+            patient_id = (
+                case_dir.name
+            )
 
             try:
                 segmentation = load_volume(
@@ -764,33 +1310,53 @@ def collect_subregion_statistics(
                     patient_id,
                     "seg",
                 )
+
             except FileNotFoundError:
                 continue
 
-            record: dict[str, int | bool | str] = {
+            record: dict[
+                str,
+                int | bool | str,
+            ] = {
                 "Patient ID": patient_id,
                 "Source": data_dir.name,
             }
 
-            for label_id, label_name in label_names.items():
+            for (
+                label_id,
+                label_name,
+            ) in label_names.items():
                 voxel_count = int(
-                    np.count_nonzero(segmentation == label_id)
+                    np.count_nonzero(
+                        segmentation
+                        == label_id
+                    )
                 )
 
-                record[f"{label_name} voxels"] = voxel_count
-                record[f"{label_name} present"] = voxel_count > 0
+                record[
+                    f"{label_name} voxels"
+                ] = voxel_count
 
-            records.append(record)
+                record[
+                    f"{label_name} present"
+                ] = (
+                    voxel_count > 0
+                )
+
+            records.append(
+                record
+            )
 
     if not records:
         raise ValueError(
-            "No valid segmentation masks were found "
-            "in the provided dataset directories."
+            "No valid segmentation masks "
+            "were found in the provided "
+            "dataset directories."
         )
 
-    return pd.DataFrame(records)
-
-
+    return pd.DataFrame(
+        records
+    )
 
 
 def add_bar_labels(
@@ -799,15 +1365,22 @@ def add_bar_labels(
     values: list[float],
     offset: float,
 ) -> None:
-    """Add percentage labels above the bars of a chart."""
-    for bar, value in zip(bars, values):
+    """
+    Add percentage labels above bars.
+    """
+    for bar, value in zip(
+        bars,
+        values,
+    ):
         ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + offset,
+            bar.get_x()
+            + bar.get_width() / 2,
+            bar.get_height()
+            + offset,
             f"{value:.1f}%",
             ha="center",
             va="bottom",
-            fontsize=11,
+            fontsize=34,
             fontweight="semibold",
         )
 
@@ -818,19 +1391,41 @@ def plot_subregion_frequency(
     output_dir: Path,
 ) -> None:
     """
-    Plot the percentage of cases in which each tumor subregion is present.
+    Plot percentage of cases in which each
+    tumor subregion is present.
     """
-    label_names, label_colors = get_label_configuration(dataset)
-    label_ids = sorted(label_names)
-    labels = [label_names[label_id] for label_id in label_ids]
-    colors = [label_colors[label_id] for label_id in label_ids]
+    (
+        label_names,
+        label_colors,
+    ) = get_label_configuration(
+        dataset
+    )
+
+    label_ids = sorted(
+        label_names
+    )
+
+    labels = [
+        label_names[label_id]
+        for label_id in label_ids
+    ]
+
+    colors = [
+        label_colors[label_id]
+        for label_id in label_ids
+    ]
 
     percentages = [
-        100 * subregion_df[f"{label_name} present"].mean()
+        100
+        * subregion_df[
+            f"{label_name} present"
+        ].mean()
         for label_name in labels
     ]
 
-    fig, ax = plt.subplots(figsize=(10.5, 6.5))
+    fig, ax = plt.subplots(
+        figsize=(15, 9.5)
+    )
 
     bars = ax.bar(
         labels,
@@ -840,10 +1435,32 @@ def plot_subregion_frequency(
         linewidth=0.8,
     )
 
-    ax.set_title("Tumor subregion frequency")
-    ax.set_ylabel("Percentage of cases (%)")
-    ax.set_ylim(0, 115)
-    ax.grid(axis="y", linestyle="--", alpha=0.35)
+    ax.set_title(
+        "Tumor subregion frequency",
+        fontsize=36,
+    )
+
+    ax.set_ylabel(
+        "Percentage of cases (%)",
+        fontsize=34,
+    )
+
+    ax.tick_params(
+        axis="both",
+        labelsize=34,
+    )
+
+    ax.set_ylim(
+        0,
+        115,
+    )
+
+    ax.grid(
+        axis="y",
+        linestyle="--",
+        alpha=0.35,
+    )
+
     ax.set_axisbelow(True)
 
     add_bar_labels(
@@ -853,7 +1470,7 @@ def plot_subregion_frequency(
         offset=1.5,
     )
 
-    fig.suptitle(f"BraTS {dataset}", y=0.98)
+    # No global BraTS title.
 
     fig.subplots_adjust(
         left=0.10,
@@ -864,7 +1481,11 @@ def plot_subregion_frequency(
 
     save_figure(
         fig,
-        output_dir / f"brats{dataset}_subregion_frequency",
+        output_dir
+        / (
+            f"brats{dataset}"
+            "_subregion_frequency"
+        ),
     )
 
 
@@ -874,31 +1495,60 @@ def plot_subregion_volume_distribution(
     output_dir: Path,
 ) -> None:
     """
-    Plot the global volume share represented by each tumor subregion.
-
-    As the BraTS volumes have uniform voxel spacing, the relative voxel count
-    is equivalent to the relative segmented volume.
+    Plot global volume share represented by each
+    tumor subregion.
     """
-    label_names, label_colors = get_label_configuration(dataset)
-    label_ids = sorted(label_names)
-    labels = [label_names[label_id] for label_id in label_ids]
-    colors = [label_colors[label_id] for label_id in label_ids]
+    (
+        label_names,
+        label_colors,
+    ) = get_label_configuration(
+        dataset
+    )
+
+    label_ids = sorted(
+        label_names
+    )
+
+    labels = [
+        label_names[label_id]
+        for label_id in label_ids
+    ]
+
+    colors = [
+        label_colors[label_id]
+        for label_id in label_ids
+    ]
 
     voxel_totals = [
-        int(subregion_df[f"{label_name} voxels"].sum())
+        int(
+            subregion_df[
+                f"{label_name} voxels"
+            ].sum()
+        )
         for label_name in labels
     ]
-    total_segmented_voxels = sum(voxel_totals)
+
+    total_segmented_voxels = sum(
+        voxel_totals
+    )
 
     if total_segmented_voxels == 0:
-        percentages = [0.0] * len(labels)
+        percentages = [
+            0.0
+        ] * len(labels)
+
     else:
         percentages = [
-            100 * voxel_count / total_segmented_voxels
-            for voxel_count in voxel_totals
+            100
+            * voxel_count
+            / total_segmented_voxels
+            for voxel_count
+            in voxel_totals
         ]
 
-    fig, ax = plt.subplots(figsize=(10.5, 6.5))
+    fig, ax = plt.subplots(
+        figsize=(15, 9.5)
+    )
 
     bars = ax.bar(
         labels,
@@ -908,10 +1558,36 @@ def plot_subregion_volume_distribution(
         linewidth=0.8,
     )
 
-    ax.set_title("Tumor subregion volume distribution")
-    ax.set_ylabel("Percentage of segmented tumor volume (%)")
-    ax.set_ylim(0, max(percentages, default=0) + 12)
-    ax.grid(axis="y", linestyle="--", alpha=0.35)
+    ax.set_title(
+        "Tumor subregion volume distribution",
+        fontsize=36,
+    )
+
+    ax.set_ylabel(
+        "Segmented tumor volume (%)",
+        fontsize=34,
+    )
+
+    ax.tick_params(
+        axis="both",
+        labelsize=34,
+    )
+
+    ax.set_ylim(
+        0,
+        max(
+            percentages,
+            default=0,
+        )
+        + 12,
+    )
+
+    ax.grid(
+        axis="y",
+        linestyle="--",
+        alpha=0.35,
+    )
+
     ax.set_axisbelow(True)
 
     add_bar_labels(
@@ -921,7 +1597,7 @@ def plot_subregion_volume_distribution(
         offset=0.8,
     )
 
-    fig.suptitle(f"BraTS {dataset}", y=0.98)
+    # No global BraTS title.
 
     fig.subplots_adjust(
         left=0.10,
@@ -932,7 +1608,11 @@ def plot_subregion_volume_distribution(
 
     save_figure(
         fig,
-        output_dir / f"brats{dataset}_subregion_volume_distribution",
+        output_dir
+        / (
+            f"brats{dataset}"
+            "_subregion_volume_distribution"
+        ),
     )
 
 
@@ -943,18 +1623,25 @@ def generate_subregion_eda_figures(
 ) -> None:
     """
     Generate subregion frequency and volume-distribution figures.
-
-    A CSV containing the patient-level voxel statistics is also stored to
-    support reproducibility and numerical checks.
     """
-    subregion_df = collect_subregion_statistics(
-        data_dirs=data_dirs,
-        dataset=dataset,
+    subregion_df = (
+        collect_subregion_statistics(
+            data_dirs=data_dirs,
+            dataset=dataset,
+        )
     )
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
     subregion_df.to_csv(
-        output_dir / f"brats{dataset}_subregion_statistics.csv",
+        output_dir
+        / (
+            f"brats{dataset}"
+            "_subregion_statistics.csv"
+        ),
         index=False,
     )
 
@@ -976,11 +1663,16 @@ def generate_subregion_eda_figures(
 # ---------------------------------------------------------------------
 
 
-def run_brats2023(args: argparse.Namespace) -> None:
+def run_brats2023(
+    args: argparse.Namespace,
+) -> None:
     """
     Generate BraTS 2023 visualizations.
     """
-    output_dir = args.output_dir / "brats2023"
+    output_dir = (
+        args.output_dir
+        / "brats2023"
+    )
 
     plot_modalities_with_mask(
         data_dirs=args.data_dir,
@@ -1003,7 +1695,11 @@ def run_brats2023(args: argparse.Namespace) -> None:
     )
 
     if args.clinical_file is not None:
-        clinical_df = read_clinical_file(args.clinical_file)
+        clinical_df = (
+            read_clinical_file(
+                args.clinical_file
+            )
+        )
 
         plot_sex_and_age(
             clinical_df=clinical_df,
@@ -1013,17 +1709,21 @@ def run_brats2023(args: argparse.Namespace) -> None:
             age_column=args.age_col,
         )
 
-        grade_column = args.category_col
+        grade_column = (
+            args.category_col
+        )
 
         if grade_column is None:
-            grade_column = find_column(
-                clinical_df,
-                [
-                    "Grade",
-                    "WHO Grade",
-                    "Meningioma Grade",
-                    "Tumor Grade",
-                ],
+            grade_column = (
+                find_column(
+                    clinical_df,
+                    [
+                        "Grade",
+                        "WHO Grade",
+                        "Meningioma Grade",
+                        "Tumor Grade",
+                    ],
+                )
             )
 
         plot_category_distribution(
@@ -1035,7 +1735,10 @@ def run_brats2023(args: argparse.Namespace) -> None:
             category_type="grade",
         )
 
-    print(f"BraTS 2023 figures saved to: {output_dir}")
+    print(
+        "BraTS 2023 figures saved to: "
+        f"{output_dir}"
+    )
 
 
 # ---------------------------------------------------------------------
@@ -1043,11 +1746,19 @@ def run_brats2023(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------
 
 
-def run_brats2024(args: argparse.Namespace) -> None:
+def run_brats2024(
+    args: argparse.Namespace,
+) -> None:
     """
     Generate BraTS 2024 visualizations.
+
+    Clinical figures are restricted to the same patient cohort
+    represented by the provided dataset directories.
     """
-    output_dir = args.output_dir / "brats2024"
+    output_dir = (
+        args.output_dir
+        / "brats2024"
+    )
 
     plot_modalities_with_mask(
         data_dirs=args.data_dir,
@@ -1070,7 +1781,20 @@ def run_brats2024(args: argparse.Namespace) -> None:
     )
 
     if args.clinical_file is not None:
-        clinical_df = read_clinical_file(args.clinical_file)
+        clinical_df = (
+            read_clinical_file(
+                args.clinical_file
+            )
+        )
+
+        # IMPORTANT:
+        # Restrict metadata to the actual experimental cohort.
+        clinical_df = (
+            filter_clinical_to_dataset(
+                clinical_df=clinical_df,
+                data_dirs=args.data_dir,
+            )
+        )
 
         plot_sex_and_age(
             clinical_df=clinical_df,
@@ -1080,20 +1804,68 @@ def run_brats2024(args: argparse.Namespace) -> None:
             age_column=args.age_col,
         )
 
-        glioma_type_column = args.category_col
+        glioma_type_column = (
+            args.category_col
+        )
 
         if glioma_type_column is None:
-            glioma_type_column = find_column(
-                clinical_df,
-                [
-                    "Type",
-                    "Glioma Type",
-                    "Tumor Type",
-                    "Diagnosis",
-                    "Histology",
-                    "Glioma Subtype",
-                ],
+            glioma_type_column = (
+                find_column(
+                    clinical_df,
+                    [
+                        "Type",
+                        "Glioma Type",
+                        "Tumor Type",
+                        "Diagnosis",
+                        "Histology",
+                        "Glioma Subtype",
+                    ],
+                )
             )
+
+        diagnosis_counts = (
+            clinical_df[
+                glioma_type_column
+            ]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .value_counts()
+        )
+
+        print()
+        print("=" * 70)
+        print("GLIOMA TYPE CHECK")
+        print("=" * 70)
+
+        print(
+            diagnosis_counts.to_string()
+        )
+
+        print()
+        print(
+            "Total cases represented in "
+            "glioma-type figure: "
+            f"{diagnosis_counts.sum()}"
+        )
+
+        print(
+            "Clinical cohort rows: "
+            f"{len(clinical_df)}"
+        )
+
+        missing_diagnosis = (
+            clinical_df[
+                glioma_type_column
+            ]
+            .isna()
+            .sum()
+        )
+
+        print(
+            "Patients without glioma-type information: "
+            f"{missing_diagnosis}"
+        )
 
         plot_category_distribution(
             clinical_df=clinical_df,
@@ -1104,7 +1876,10 @@ def run_brats2024(args: argparse.Namespace) -> None:
             category_type="type",
         )
 
-    print(f"BraTS 2024 figures saved to: {output_dir}")
+    print(
+        "BraTS 2024 figures saved to: "
+        f"{output_dir}"
+    )
 
 
 # ---------------------------------------------------------------------
@@ -1118,38 +1893,49 @@ def parse_arguments() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         description=(
-            "Generate publication-ready MRI, clinical, and subregion "
-            "visualizations for BraTS 2023 or BraTS 2024."
+            "Generate publication-ready MRI, clinical, "
+            "and subregion visualizations for "
+            "BraTS 2023 or BraTS 2024."
         )
     )
 
     parser.add_argument(
         "dataset",
-        choices=["2023", "2024"],
-        help="Dataset available on the current device.",
+        choices=[
+            "2023",
+            "2024",
+        ],
+        help=(
+            "Dataset available on the current device."
+        ),
     )
 
-    
     parser.add_argument(
         "--data-dir",
         type=Path,
         nargs="+",
         required=True,
-        help="One or more directories containing patient folders.",
+        help=(
+            "One or more directories containing "
+            "patient folders."
+        ),
     )
-
 
     parser.add_argument(
         "--output-dir",
         type=Path,
         required=True,
-        help="Directory where figures will be saved.",
+        help=(
+            "Directory where figures will be saved."
+        ),
     )
 
     parser.add_argument(
         "--patient-id",
         required=True,
-        help="Patient identifier used for MRI visualizations.",
+        help=(
+            "Patient identifier used for MRI visualizations."
+        ),
     )
 
     parser.add_argument(
@@ -1165,13 +1951,17 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--sex-col",
         default=None,
-        help="Sex-column name, if automatic detection fails.",
+        help=(
+            "Sex-column name, if automatic detection fails."
+        ),
     )
 
     parser.add_argument(
         "--age-col",
         default=None,
-        help="Age-column name, if automatic detection fails.",
+        help=(
+            "Age-column name, if automatic detection fails."
+        ),
     )
 
     parser.add_argument(
@@ -1201,6 +1991,7 @@ def main() -> None:
 
     if args.dataset == "2023":
         run_brats2023(args)
+
     else:
         run_brats2024(args)
 
@@ -1209,8 +2000,11 @@ if __name__ == "__main__":
     main()
 
 
+
+
+
 # python scripts/generate_brats_figures.py 2023 --data-dir data_diego/ --clinical-fil data_diego/Meningioma\ supplementary\ clinical\ data\ and\ imaging\ parameters\ for\ training\ and\ validation\ sets\ \(1\).xlsx --output-dir figures/eda_article/ --patient-id "BraTS-MEN-00891-000"
 
 
-# python scripts/generate_brats_figures.py 2024 --data-dirs data/training_data1_v2 data/training_data_additional --clinical-file data/BraTS-PTG\ supplementary\ demographic\ information\ and\ metadata.xlsx --output-dir figures/eda_article --patient-id "BraTS-GLI-03063-100"
+# python scripts/generate_brats_figures.py 2024 --data-dir data/training_data1_v2 data/training_data_additional --clinical-file data/BraTS-PTG\ supplementary\ demographic\ information\ and\ metadata.xlsx --output-dir figures/eda_article --patient-id "BraTS-GLI-03063-100"
 
